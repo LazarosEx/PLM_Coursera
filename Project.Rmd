@@ -1,0 +1,78 @@
+---
+title: "Project"
+author: "Lazaros Ex"
+date: "September 24, 2015"
+output: html_document
+---
+---
+title: "Project_PML"
+author: "Lazaros Ex"
+date: "September 24, 2015"
+output: html_document
+---
+As a first step we read the training and testing dataset. The data are separated in the file with a "," so we define this separation with "sep=','" when reading them. There are also "NA" values as well as "#DIV/0!" values included in the data. For this reason we use "na.strings" in order to interpret missing values, NA's and "#DIV/0!" as NA's in order to remove them later on.
+
+```{r}
+library(caret)
+training = read.csv("C:/Users/lazar_000/Desktop/Coursera Course - R notes/Project_html/pml-training.csv",sep=',', na.strings=c('NA','','#DIV/0!'))  # read training csv file 
+testing = read.csv("C:/Users/lazar_000/Desktop/Coursera Course - R notes/Project_html/pml-testing.csv" ,sep=',', na.strings=c('NA','','#DIV/0!'))  # read testing csv file 
+```
+
+Columns 1-6 are irrelevant as predictors since they include dates, names etc. which are useless for our prediction. Those data are removed from both the training and the testing set as below:
+
+```{r}
+training=training[,-(1:6)]
+testing=testing[,-(1:6)]
+```
+
+The NA's should also be deleted from our training and testing sets. So we remove the useless variables indicated with NA. For this purpose we use an anonymous function which is applied on the columns of the training set and returns the NA values. We update the training set in order to contain only the variables without NA's. We repeat the same procedure for the testing set.
+
+```{r}
+FindNA= apply(training,2,function(x) {sum(is.na(x))}) 
+training = training[,which(FindNA == 0)]
+FindNA = apply(testing,2,function(x) {sum(is.na(x))}) 
+testing = testing[,which(FindNA == 0)]
+```
+
+Variables that have a zero or near-zero variance should also be removed because they may cause instability to the fit. We have used the nearZeroVar to remove them from the training and the testing datasets as below:
+
+```{r}
+FindNearZero = nearZeroVar(training, saveMetrics = T)
+training = training[, !FindNearZero$nzv]
+FindNearZerotest = nearZeroVar(testing, saveMetrics = T)
+testing = testing[, !FindNearZerotest$nzv]
+```
+
+Now in order to go on with the cross-validation phase, we partition the training dataset into a new training and testing dataset. Note that "Testing_new" refers to the cross-validation test set, while "testing" refers to the project's input. We devide the data as training and testing sets in order to train the model and then find the out-of-sample error. The 3/4 of the initial training dataset will be the new training set and the 1/4 the test set.
+
+```{r}
+inTrain = createDataPartition(training$classe, p=3/4, list=FALSE)
+Training_new = training[inTrain, ]
+Testing_new = training[-inTrain, ]
+dim(Training_new) 
+dim(Testing_new)
+```
+
+Due to the large number of predictors we choose to use Random Forests and calculate the out-of-sample error. First we train the model with the random forest method.In this stage we also allow R to use Parallel procesing if possible.
+
+```{r}
+set.seed(987654)
+modFit_rf <- train(classe ~., method="rf", data=Training_new,trControl=trainControl(method='cv'), number=3, allowParallel=TRUE)
+
+Pred_rf <- predict(modFit_rf, Training_new)
+confusionMatrix(Pred_rf, Training_new$classe)
+```
+
+We then predict with the trained model for our testing dataset to calculate the out-of-sample error.
+
+```{r}
+cross_pred_rf <- predict(modFit_rf, Testing_new)
+confusionMatrix(cross_pred_rf, Testing_new$classe)
+```
+The accuracy of RF can be seen in the above confusion matrix while the estimated out-of-sample error will be 1-accuracy.
+
+Finally, we predict for the requested testing set to find out the 20 asked prediction values of "classe". The results gave 20/20 correct predictions.
+
+```{r}
+testing_pred_rf <- predict(modFit_rf, testing) 
+```
